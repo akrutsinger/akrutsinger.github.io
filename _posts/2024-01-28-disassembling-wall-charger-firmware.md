@@ -6,7 +6,7 @@ date:   2024-01-28 07:32:00
 ---
 
 ## Recap
-In a [previous](/_posts/2023-10-08-tesla-wall-charger-firmware-file-structure.md) post, we examined the Tesla Wall Charger firmware file used to update the wall charger. Tesla's binary file is a container file with a file magic of `SBFH` and holds metadata about another firmware container inside the file. The second inner firmware container is for the 88MW30x WiFi chips. This chip-specific firmware contains metadata in a header for where different code segments are located in the file and where those code segments are loaded into the hardware's memory.
+In a [previous](https://akrutsinger.github.io/2023/10/08/tesla-wall-charger-firmware-file-structure.html) post, we examined the Tesla Wall Charger firmware file used to update the wall charger. Tesla's binary file is a container file with a file magic of `SBFH` and holds metadata about another firmware container inside the file. The second inner firmware container is for the 88MW30x WiFi chips. This chip-specific firmware contains metadata in a header for where different code segments are located in the file and where those code segments are loaded into the hardware's memory.
 
 In this post, we'll continue building an understanding of the firmware in preparation for disassembly and higher-order reverse engineering. We'll see how the code is aligned in memory and begin to set a foundation for recognizing the structure of the disassembled code.
 
@@ -76,7 +76,7 @@ The datasheet confirms where the code could be loaded in memory. However, these 
 
 ### Previous Reverse Engineering
 
-In a [previous](/_posts/2023-10-08-tesla-wall-charger-firmware-file-structure.md) post, we looked at the structure of the firmware container files and discovered some fields that represented virtual memory addresses for code segments. If the firmware file is following the structure we think it is for the 88MW30x microcontroller, we should be able to go back and look at those addresses for the fidelity we need. Suppose the firmware metadata falls anywhere within the general `0x1F??????` or `0x001?????` ranges we've identified so far. In that case, loading the firmware at those specific addresses will likely result in properly disassembling the firmware.
+In a [previous](https://akrutsinger.github.io/2023/10/08/tesla-wall-charger-firmware-file-structure.html) post, we looked at the structure of the firmware container files and discovered some fields that represented virtual memory addresses for code segments. If the firmware file is following the structure we think it is for the 88MW30x microcontroller, we should be able to go back and look at those addresses for the fidelity we need. Suppose the firmware metadata falls anywhere within the general `0x1F??????` or `0x001?????` ranges we've identified so far. In that case, loading the firmware at those specific addresses will likely result in properly disassembling the firmware.
 
 What we can see from the Marvell metadata is that the firmware segments should be mapped to the following memory location:
 - Segment 1: `0x00100000`
@@ -147,7 +147,7 @@ One thing to note is that the reference count above shows how many functions ref
 | :--: |
 | *Arbitrary String References* |
 
-Many other indicators seem a bit off and will give you the impression that the firmware needs to be entirely mapped to the correct location and disassembled correctly. To see what this firmware code actually looks like, we'll now use what we've learned from the microprocessor's [datasheet](https://community.nxp.com/pwmxy87654/attachments/pwmxy87654/other/10979/2/88MW30x-DS.pdf) and [previous](/_posts/2023-10-08-tesla-wall-charger-firmware-file-structure.md) reverse engineering efforts of the firmware container file to help us get the firmware mapped to the correct memory.
+Many other indicators seem a bit off and will give you the impression that the firmware needs to be entirely mapped to the correct location and disassembled correctly. To see what this firmware code actually looks like, we'll now use what we've learned from the microprocessor's [datasheet](https://community.nxp.com/pwmxy87654/attachments/pwmxy87654/other/10979/2/88MW30x-DS.pdf) and [previous](https://akrutsinger.github.io/2023/10/08/tesla-wall-charger-firmware-file-structure.html) reverse engineering efforts of the firmware container file to help us get the firmware mapped to the correct memory.
 
 ## Informed Disassembly
 
@@ -231,4 +231,4 @@ Likewise, many strings have multiple references throughout the code when looking
 
 ## Conclusion
 
-In another attempt to lower the barrier to entry, we've looked at how to load firmware based on clues we've discovered from [previous](/_posts/2023-10-08-tesla-wall-charger-firmware-file-structure.md) reverse engineering efforts. We also looked at clues in the firmware disassembly that may help us know if we correctly understand the code/firmware relations and if our disassembly is accurate. Lastly, we mapped the firmware correctly to memory and can look for the same clues as before to see if we are on the right path to successfully disassembling the firmware. Once successfully disassembled, we can begin the new journey of understanding what the code actually does.
+In another attempt to lower the barrier to entry, we've looked at how to load firmware based on clues we've discovered from [previous](https://akrutsinger.github.io/2023/10/08/tesla-wall-charger-firmware-file-structure.html) reverse engineering efforts. We also looked at clues in the firmware disassembly that may help us know if we correctly understand the code/firmware relations and if our disassembly is accurate. Lastly, we mapped the firmware correctly to memory and can look for the same clues as before to see if we are on the right path to successfully disassembling the firmware. Once successfully disassembled, we can begin the new journey of understanding what the code actually does.
