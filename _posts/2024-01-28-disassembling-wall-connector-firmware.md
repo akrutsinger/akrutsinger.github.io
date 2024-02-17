@@ -1,12 +1,12 @@
 ---
 layout: post
 comments: false
-title: "Disassembling Tesla Wall Charger Firmware"
+title: "Disassembling Tesla Wall Connector Firmware"
 date:   2024-01-28 07:32:00
 ---
 
 ## Recap
-In a [previous](https://akrutsinger.github.io/2023/10/08/tesla-wall-charger-firmware-file-structure.html) post, we examined the Tesla Wall Charger firmware file used to update the wall charger. Tesla's binary file is a container file with a file magic of `SBFH` and holds metadata about another firmware container inside the file. The second inner firmware container is for the 88MW30x WiFi chips. This chip-specific firmware contains metadata in a header for where different code segments are located in the file and where those code segments are loaded into the hardware's memory.
+In a [previous](https://akrutsinger.github.io/2023/10/08/tesla-wall-connector-firmware-file-structure.html) post, we examined the Tesla wall connector firmware file used to update the wall connector. Tesla's binary file is a container file with a file magic of `SBFH` and holds metadata about another firmware container inside the file. The second inner firmware container is for the 88MW30x WiFi chips. This chip-specific firmware contains metadata in a header for where different code segments are located in the file and where those code segments are loaded into the hardware's memory.
 
 In this post, we'll continue building an understanding of the firmware in preparation for disassembly and higher-order reverse engineering. We'll see how the code is aligned in memory and begin to set a foundation for recognizing the structure of the disassembled code.
 
@@ -16,19 +16,19 @@ There are many different tools for disassembling bare-metal firmware. For exampl
 
 To start, we'll open Ghidra and create a new project.
 
-| ![new-project](/assets/images/disassemble-wall-charger-firmware/new-project.png) |
+| ![new-project](/assets/images/disassemble-wall-connector-firmware/new-project.png) |
 | :--: |
 | *Create a new Ghidra project* |
 
 After creating the project, import the firmware we [downloaded](https://digitalassets.tesla.com/tesla-contents/raw/upload/WC3-NA-2382-20230310-ce13e49b546382prodsigned.bin). Easiest way to import the firmware binary file to the project is by dragging and dropping the file into the *Active Project* tree view area.
 
-| ![import-file](/assets/images/disassemble-wall-charger-firmware/import-file.png) |
+| ![import-file](/assets/images/disassemble-wall-connector-firmware/import-file.png) |
 | :--: |
 | *Import the firmware binary into Ghidra* |
 
 Before pressing `OK`, we must tell Ghidra which language the binary file is encoded in. After reading through the 88MW30x datasheet, we know this chip is powered by an ARM Cortex-M4 CPU and uses little-endian memory space. Press the ellipsis (`...`) next to the *Language:* text box and search for `cortex`. The WiFi chip uses the ARM Cortex-M4 processor, with instructions in little-endian format. Select this language, and we'll be one step closer to seeing some code!
 
-| ![set-language](/assets/images/disassemble-wall-charger-firmware/set-language.png) |
+| ![set-language](/assets/images/disassemble-wall-connector-firmware/set-language.png) |
 | :--: |
 | *Set the firmware's language for little-endian ARM Cortex-M4* |
 
@@ -43,7 +43,7 @@ When dealing with bare metal ARM firmware binaries, we can sometimes rely on the
 
 Look at the image below. Assuming the first word is the stack address, the stack is at 0x20020000. Remember, the firmware is loaded in little-endian byte order on 32-bit architecture. When we read the numbers in the file, we first read the least significant byte.
 
-| ![first-words-of-firmware](/assets/images/disassemble-wall-charger-firmware/first-words-of-firmware-hexdump.png) |
+| ![first-words-of-firmware](/assets/images/disassemble-wall-connector-firmware/first-words-of-firmware-hexdump.png) |
 | :--: |
 | *First words of firmware* |
 
@@ -55,7 +55,7 @@ Sometimes, compilers will encode instructions that have relative offsets to wher
 
 We are going off the assumption that the code could be loaded at `0x1F0?????` or maybe `0x0010????`. Luckily for us, the firmware file is big enough that we can scroll down to the bytes around `0x0010????` and see if there are a lot of data references. When scrolling that portion of the code, there is a lot of code referencing memory in this `0x001?????` region. These addresses themselves are not terribly helpful, but they do help amplify our belief that the firmware should be loaded somewhere closer to `0x1F??????` or `0x001?????` instead of at `0x00000000` where we have it now.
 
-| ![hard-coded-addresses](/assets/images/disassemble-wall-charger-firmware/hardcoded-addresses.png) |
+| ![hard-coded-addresses](/assets/images/disassemble-wall-connector-firmware/hardcoded-addresses.png) |
 | :--: |
 | *Some Hard-coded addresses* |
 
@@ -66,7 +66,7 @@ Datasheets are generally the go-to source for understanding the memory layout of
 
 In this instance, we know we're dealing with the 88MW30x microcontroller, and we can find the datasheet provided by the [manufacturer](https://community.nxp.com/pwmxy87654/attachments/pwmxy87654/other/10979/2/88MW30x-DS.pdf). The datasheet will typically give a memory map diagram that shows what the microcontroller's memory addresses correspond to. The image below is a snip of the datasheet.
 
-| ![memory-map](/assets/images/disassemble-wall-charger-firmware/88mw30x-memory-map.png) |
+| ![memory-map](/assets/images/disassemble-wall-connector-firmware/88mw30x-memory-map.png) |
 | :--: |
 | *Memory map diagram for the 88MW30x Wireless Microcontroller* |
 
@@ -76,7 +76,7 @@ The datasheet confirms where the code could be loaded in memory. However, these 
 
 ### Previous Reverse Engineering
 
-In a [previous](https://akrutsinger.github.io/2023/10/08/tesla-wall-charger-firmware-file-structure.html) post, we looked at the structure of the firmware container files and discovered some fields that represented virtual memory addresses for code segments. If the firmware file is following the structure we think it is for the 88MW30x microcontroller, we should be able to go back and look at those addresses for the fidelity we need. Suppose the firmware metadata falls anywhere within the general `0x1F??????` or `0x001?????` ranges we've identified so far. In that case, loading the firmware at those specific addresses will likely result in properly disassembling the firmware.
+In a [previous](https://akrutsinger.github.io/2023/10/08/tesla-wall-connector-firmware-file-structure.html) post, we looked at the structure of the firmware container files and discovered some fields that represented virtual memory addresses for code segments. If the firmware file is following the structure we think it is for the 88MW30x microcontroller, we should be able to go back and look at those addresses for the fidelity we need. Suppose the firmware metadata falls anywhere within the general `0x1F??????` or `0x001?????` ranges we've identified so far. In that case, loading the firmware at those specific addresses will likely result in properly disassembling the firmware.
 
 What we can see from the Marvell metadata is that the firmware segments should be mapped to the following memory location:
 - Segment 1: `0x00100000`
@@ -89,7 +89,7 @@ Now, we have all the information to ensure the correct parts of the firmware fil
 
 Before showing what it looks like to configure the memory regions in Ghidra correctly, I want to indicate how the code looks when we naively load a binary file. This intends to show indicators that our process or approach is going in the right direction or not. Too often, we only see the right way to solve technical reverse-engineering problems but miss an opportunity to notice what subsumes the bulk of our time: messing up.
 
-Often, you may hear references to firmware images for a device like a router. A router's firmware image differs significantly from what we're dealing with. A router's firmware will have a significant known data structure that we can use to unpack a known file system format and extract executable files containing code. For example, the code could be in a familiar and well-known format such as [ELF](https://en.wikipedia.org/wiki/Executable_and_Linkable_Format). Loading an ELF file in Ghidra is trivial because all details about memory layout and code and data segments are specified in the loaded file itself, and Ghidra knows how to parse the ELF headers and load the code/data. We must have the luxury of Ghidra knowing how to parse our wall charger's firmware. We could write our own loader, but we'll understand this post's requirements by manually loading the firmware.
+Often, you may hear references to firmware images for a device like a router. A router's firmware image differs significantly from what we're dealing with. A router's firmware will have a significant known data structure that we can use to unpack a known file system format and extract executable files containing code. For example, the code could be in a familiar and well-known format such as [ELF](https://en.wikipedia.org/wiki/Executable_and_Linkable_Format). Loading an ELF file in Ghidra is trivial because all details about memory layout and code and data segments are specified in the loaded file itself, and Ghidra knows how to parse the ELF headers and load the code/data. We must have the luxury of Ghidra knowing how to parse our wall connector's firmware. We could write our own loader, but we'll understand this post's requirements by manually loading the firmware.
 
 ## Naive Disassembly
 
@@ -99,7 +99,7 @@ In this context, Naive disassembly lets Ghidra load the entire firmware file int
 
 When we tell Ghidra to load the entire file into memory and not specify a memory address for where the code is loaded, by default, the whole file is treated like code and is loaded at address `0x00000000`. We can see below that Ghidra is trying to treat the `SBFH` header of the firmware container as either data or code, which we know isn't correct. We can also see the little orange outline blocks on the right of the image below; these are places in the file where the Ghidra analysis detected some ARM instructions and disassembled them. The disassembly above looks promising, but we should expect much more of the file to be disassembled in a raw firmware blob. Let's examine for other indicators in the disassembly and string references that indicate we need to load the file entirely correctly.
 
-| ![naive-start-of-code](/assets/images/disassemble-wall-charger-firmware/naive-start-of-code.png) |
+| ![naive-start-of-code](/assets/images/disassemble-wall-connector-firmware/naive-start-of-code.png) |
 | :--: |
 | *Beginning of the Disassembly* |
 
@@ -107,7 +107,7 @@ When we tell Ghidra to load the entire file into memory and not specify a memory
 
 Another indicator that is often easy to spot and can help indicate the firmware isn't loaded at the correct memory address is undefined bytes immediately before or after analyzed functions. Generally speaking, the data before or after a function will be another function or reserved memory referenced by the nearby function. For example, if a function references a string, the bytes of that string could immediately follow the function. Or if the function references a pointer to another memory address, that pointer could be hard-coded as some data immediately following the function. These are not the only reasons for having referenced bytes after a function; however, not having any initialized bytes can indicate that we still need to load the firmware into the correct memory mapping and adequately disassemble.
 
-| ![unprocessed-bytes](/assets/images/disassemble-wall-charger-firmware/unprocessed-bytes-near-function.png) |
+| ![unprocessed-bytes](/assets/images/disassemble-wall-connector-firmware/unprocessed-bytes-near-function.png) |
 | :--: |
 | *Unprocessed bytes around functions* |
 
@@ -115,7 +115,7 @@ Another indicator that is often easy to spot and can help indicate the firmware 
 
 Showing patterns in the function's disassembly is difficult in a document like this because we benefit from looking at many functions. Still, we can see some aspects to look for in the randomly selected function below. We notice that the function starts with the typical prologue of a `push` instruction, and there are some `move` and `compare` instructions, which are common and usual. But then we notice some `it`, `mov.ge`, `itet`, `sub.gt`, etc. These are all obviously valid instructions, but they are uncommon. As you scroll through more and more code, you may see an unusually high number of these less common instructions. While this alone isn't necessarily an indicator, it is another data point that we may not have our code correctly loaded. Another indicator that may strike you as odd is how few functions reference any of the strings in the file. Next, we'll see just how many strings are actually referenced.
 
-| ![naive-disassembly](/assets/images/disassemble-wall-charger-firmware/naive-function-disassembly.png) |
+| ![naive-disassembly](/assets/images/disassemble-wall-connector-firmware/naive-function-disassembly.png) |
 | :--: |
 | *Randomly selected Function Disassembly* |
 
@@ -127,7 +127,7 @@ Showing patterns in the function's disassembly is difficult in a document like t
 
  Additionally, we saw [earlier](#undefined-data-around-functions) that significant amounts of code didn't disassemble, and the code that disassembled into functions might not even be actual. In other words, Ghidra could have found a string of bytes correctly decoded to legitimate assembly instructions. However, suppose Ghidra would have started the analysis 1 byte or 2 bytes further into the file. In that case, you'd still have bytes of the file that could disassembly into legitimate but very different instructions.
 
-| ![naive-string-ref-count](/assets/images/disassemble-wall-charger-firmware/naive-string-ref-counts.png) |
+| ![naive-string-ref-count](/assets/images/disassemble-wall-connector-firmware/naive-string-ref-counts.png) |
 | :--: |
 | *Number of String References* |
 
@@ -135,7 +135,7 @@ Showing patterns in the function's disassembly is difficult in a document like t
 
 Another indicator I want to mention is when you see disassembled code reference in the middle of strings. While this doesn't necessarily give us insights into where the code should be loaded, it indicates that we still need to load the code at the correct memory address.
 
-| ![reference-middle-of-string](/assets/images/disassemble-wall-charger-firmware/reference-middle-of-string.png) |
+| ![reference-middle-of-string](/assets/images/disassemble-wall-connector-firmware/reference-middle-of-string.png) |
 | :--: |
 | *Code references middle of string* |
 
@@ -143,36 +143,36 @@ Another indicator I want to mention is when you see disassembled code reference 
 
 One thing to note is that the reference count above shows how many functions reference the string at the address where the string starts. If we click through multiple strings, we can see that there are actually hundreds of references to strings, but so many are at arbitrary locations within the string. A firmware image could have lots of strings compiled into it, like a string table or something, but none of the code referenced it. The compiler never optimized the unused data way. Still, when we see hundreds of strings with multiple references at arbitrary points within the string, we can safely assume we must correctly map the firmware to the proper memory regions.
 
-| ![naive-arbitrary-string-ref](/assets/images/disassemble-wall-charger-firmware/naive-arbitrary-string-references.png) |
+| ![naive-arbitrary-string-ref](/assets/images/disassemble-wall-connector-firmware/naive-arbitrary-string-references.png) |
 | :--: |
 | *Arbitrary String References* |
 
-Many other indicators seem a bit off and will give you the impression that the firmware needs to be entirely mapped to the correct location and disassembled correctly. To see what this firmware code actually looks like, we'll now use what we've learned from the microprocessor's [datasheet](https://community.nxp.com/pwmxy87654/attachments/pwmxy87654/other/10979/2/88MW30x-DS.pdf) and [previous](https://akrutsinger.github.io/2023/10/08/tesla-wall-charger-firmware-file-structure.html) reverse engineering efforts of the firmware container file to help us get the firmware mapped to the correct memory.
+Many other indicators seem a bit off and will give you the impression that the firmware needs to be entirely mapped to the correct location and disassembled correctly. To see what this firmware code actually looks like, we'll now use what we've learned from the microprocessor's [datasheet](https://community.nxp.com/pwmxy87654/attachments/pwmxy87654/other/10979/2/88MW30x-DS.pdf) and [previous](https://akrutsinger.github.io/2023/10/08/tesla-wall-connector-firmware-file-structure.html) reverse engineering efforts of the firmware container file to help us get the firmware mapped to the correct memory.
 
 ## Informed Disassembly
 
 When we load the firmware into Ghidra's CodeBrowser this time, we do not want to analyze it. It is not a big deal if you do analyze here, but we already know how the results will turn out. So skip the analysis, and we'll start creating the memory blocks to match how the firmware expects to be loaded into memory.
 
-| ![no-analyze](/assets/images/disassemble-wall-charger-firmware/no-analyze.png) |
+| ![no-analyze](/assets/images/disassemble-wall-connector-firmware/no-analyze.png) |
 | :--: |
 | *Skip analysis of disassembly* |
 
 
 In the CodeBrowser's main window, go to `Window`->`Memory Map` to open the Memory Map window. Here is where we will tell Ghidra the start and end addresses for different memory blocks. In addition to telling Ghidra the memory address, we will also tell Ghidra exactly where in the firmware file to pull the data to load into the memory blocks.
 
-| ![default-mem-map](/assets/images/disassemble-wall-charger-firmware/default-ghidra-memory-map.png) |
+| ![default-mem-map](/assets/images/disassemble-wall-connector-firmware/default-ghidra-memory-map.png) |
 | :--: |
 | *Default Ghidra Memory Map* |
 
 By default, Ghidra creates a memory block that starts at `0x0` and goes as many bytes as are contained in the firmware file we loaded. If we make our memory blocks, we will likely overlap the start address within the file's length. To prevent the overlap, we delete all the blocks to have an empty map.
 
-| ![delete-mem-block](/assets/images/disassemble-wall-charger-firmware/delete-memory-block.png) |
+| ![delete-mem-block](/assets/images/disassemble-wall-connector-firmware/delete-memory-block.png) |
 | :--: |
 | *Delete Existing Memory Block* |
 
 Now click the green plus icon to add a new memory block.
 
-| ![add-new-mem-block](/assets/images/disassemble-wall-charger-firmware/add-new-memory-block.png) |
+| ![add-new-mem-block](/assets/images/disassemble-wall-connector-firmware/add-new-memory-block.png) |
 | :--: |
 | *Add A Memory Block* |
 
@@ -202,14 +202,14 @@ We can write out all the necessary details to add our three memory blocks with t
 
 One last thing to note is the permissions checkboxes. Since we have yet to learn what all the code does and how it interacts with other memory blocks, it's typically easiest to check all three: Read, Write, and Execute. Otherwise, you will likely get incomplete disassembly. Try selecting only one or two or any combination of permissions to see how Ghidra's disassembly performs.
 
-| ![mem-block-details](/assets/images/disassemble-wall-charger-firmware/memory-block-details.png) |
+| ![mem-block-details](/assets/images/disassemble-wall-connector-firmware/memory-block-details.png) |
 | :--: |
 | *Adding A Memory Block Details* |
 
 
-Below, we've added the three code segments extracted from the firmware file. This will adequately represent the firmware in memory as expected in the Wall Charger's hardware and allow Ghidra to disassemble only the code without trying to interpret other meta-data parts of the firmware file container.
+Below, we've added the three code segments extracted from the firmware file. This will adequately represent the firmware in memory as expected in the wall connector's hardware and allow Ghidra to disassemble only the code without trying to interpret other meta-data parts of the firmware file container.
 
-| ![all-mem-blocks](/assets/images/disassemble-wall-charger-firmware/correctly-represented-memory-before-analysis.png) |
+| ![all-mem-blocks](/assets/images/disassemble-wall-connector-firmware/correctly-represented-memory-before-analysis.png) |
 | :--: |
 | *All three Memory Sections Mapped* |
 
@@ -219,16 +219,16 @@ Of course, we don't have to stop at these three particular memory blocks. I'm on
 
 From the start, we can see below that Ghidra is no longer trying to load the `SBFH` portion of the file. We told Ghidra the file offset to load at a particular address. We could further improve this disassembly by adding labels to the vector table for the 88MW30x microcontroller.
 
-| ![informed-start-of-code](/assets/images/disassemble-wall-charger-firmware/informed-start-of-code.png) |
+| ![informed-start-of-code](/assets/images/disassemble-wall-connector-firmware/informed-start-of-code.png) |
 | :--: |
 | *Memory addresses are correct, and code coverage is much better* |
 
 Likewise, many strings have multiple references throughout the code when looking at the defined string reference counts. If you glanced at the memory addresses of these strings (and surrounding ones), you'd see no references to the middle of these strings. The code is loaded correctly, and now we can continue our journey.
 
-| ![informed-string-ref-count](/assets/images/disassemble-wall-charger-firmware/informed-string-ref-count.png) |
+| ![informed-string-ref-count](/assets/images/disassemble-wall-connector-firmware/informed-string-ref-count.png) |
 | :--: |
 | *Significantly more referenced strings after memory-informed analysis* |
 
 ## Conclusion
 
-In another attempt to lower the barrier to entry, we've looked at how to load firmware based on clues we've discovered from [previous](https://akrutsinger.github.io/2023/10/08/tesla-wall-charger-firmware-file-structure.html) reverse engineering efforts. We also looked at clues in the firmware disassembly that may help us know if we correctly understand the code/firmware relations and if our disassembly is accurate. Lastly, we mapped the firmware correctly to memory and can look for the same clues as before to see if we are on the right path to successfully disassembling the firmware. Once successfully disassembled, we can begin the new journey of understanding what the code actually does.
+In another attempt to lower the barrier to entry, we've looked at how to load firmware based on clues we've discovered from [previous](https://akrutsinger.github.io/2023/10/08/tesla-wall-connector-firmware-file-structure.html) reverse engineering efforts. We also looked at clues in the firmware disassembly that may help us know if we correctly understand the code/firmware relations and if our disassembly is accurate. Lastly, we mapped the firmware correctly to memory and can look for the same clues as before to see if we are on the right path to successfully disassembling the firmware. Once successfully disassembled, we can begin the new journey of understanding what the code actually does.
