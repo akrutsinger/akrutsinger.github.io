@@ -12,7 +12,7 @@ There are many ways to protect your private devices that host public services. T
 1. WireGuard
 2. iptables
 
-Imagine having a service, in this case, a [Ghidra](https://https://ghidra-sre.org/) server, running on your personal computer at home and you'd like to protect your home IP address.
+Imagine having a service, in this case, a [Ghidra](https://ghidra-sre.org/) server, running on your personal computer at home and you'd like to protect your home IP address.
 
 ![network-concept](/assets/images/wireguard-port-forwarding/network-concept.png)
 
